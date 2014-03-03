@@ -13,7 +13,10 @@
 import re
 import copy
 import codecs
+from py2neo import neo4j
+from py2neo import node, rel
 
+graph_db = neo4j.GraphDatabaseService("http://localhost:7474/db/data/")
 
 class typogen(object):
     """generate typo"""
@@ -395,9 +398,21 @@ class typogen(object):
         except KeyError:
             pass
 
+        graph_db.clear()
+        domains_index = graph_db.get_or_create_index(neo4j.Node, "Domains")
+        typos_index = graph_db.get_or_create_index(neo4j.Relationship, "Typos")
+
+        # create the original node
+        orig_node = domains_index.get_or_create("domain", strHost, {"domain": strHost})
+
         # Remove any invalid typos
         for typo in copy.copy(uniqueTypos):
             if not self.is_domain_valid(typo):
                 uniqueTypos.remove(typo)
+            elif not typo is strHost:
+                typo_node, = node(domainname=typo)
+                typo_node = domains_index.get_or_create("domain", typo, {"domain": typo})
+
+                typo_rel = typos_index.get_or_create("typo", strHost + " " + typo, (orig_node, "TYPO", typo_node))
 
         return sorted([codecs.decode(asciiHost.encode(), "idna") for asciiHost in uniqueTypos])
